@@ -1,106 +1,110 @@
-# Projeto userService
+# User Service - Multi-tenant Application
 
-Este é um projeto Spring Boot que expõe uma API REST para gerenciamento de usuários (CRUD). O projeto demonstra o uso de Spring Data JPA, Spring Security, validação customizada e uma arquitetura multi-tenant.
+Este é um projeto **Spring Boot** que fornece um sistema completo de gestão de usuários. O projeto foi desenhado para demonstrar a aplicação prática de **Design Patterns (GoF)**, arquitetura **Multi-tenant**, e desenvolvimento Web com **Thymeleaf**.
 
-## Principais Características
+O sistema possui tanto uma **API REST** quanto uma **Interface Web (Dashboard)** para administração.
 
-* **Spring Boot 3.5.5**: Framework base da aplicação.
-* **API REST**: Endpoints para operações CRUD (Criar, Ler, Atualizar, Deletar) de usuários.
-* **Spring Data JPA**: Para persistência de dados com o Hibernate.
-* **Banco de Dados H2**: Banco de dados em memória para desenvolvimento e testes.
-* **Spring Security**: Para configuração de segurança e hashing de senhas (usando BCrypt).
-* **Multi-Tenancy**: Arquitetura multi-tenant baseada em coluna (discriminator) com o header `x-tenant`.
-* **Validação**: Validação de DTOs (`jakarta.validation`) e validações customizadas para criação e atualização de usuários.
-* **Dozer**: Mapeamento de objetos entre DTOs (`UserDTO`) e Entidades (`UserEntity`).
-* **Gerenciamento de Exceções**: Handler de exceções centralizado (`@ControllerAdvice`) para respostas de erro consistentes.
-* **Spring Boot Actuator**: Endpoints de monitoramento e gerenciamento da aplicação.
+## 🚀 Principais Características
 
-## Requisitos
+* **Arquitetura Multi-Tenant**: Isolamento de dados baseado em coluna (`discriminator`) via header `x-tenant` ou sessão web.
+* **Design Patterns**: Aplicação de padrões Criacionais, Estruturais e Comportamentais.
+* **Interface Web Responsiva**: Dashboard administrativo criado com Thymeleaf e Bootstrap 5.
+* **Auditoria**: Sistema de log de operações em arquivo (`audit.log`) via Adapter.
+* **Segurança**: Hashing de senhas com BCrypt e validação de força de senha customizável.
+* **API REST**: Endpoints documentados para integração externa.
 
-* Java 25 (Conforme especificado no `pom.xml`)
-* Apache Maven 3.9.11+ (O projeto inclui o Maven Wrapper para facilitar a build)
+---
 
-## Como Executar
+## 🏗️ Design Patterns Aplicados
 
-1.  Clone o repositório (ou tenha os arquivos do projeto).
-2.  Navegue até o diretório raiz do projeto.
-3.  Execute o projeto usando o Maven Wrapper:
+O projeto foca na utilização de boas práticas de Engenharia de Software através dos seguintes padrões:
 
-    *No Linux/macOS:*
+### 1. Strategy (Comportamental)
+* **Problema**: A necessidade de validar senhas com regras que podem mudar (ex: senha forte, senha simples, validação corporativa).
+* **Solução**: Interface `PasswordStrategy`.
+* **Implementação**: A classe `StrongPasswordStrategy` encapsula a lógica de validação (mínimo 8 caracteres, caracteres especiais), permitindo trocar a política de segurança sem alterar o `UserService`.
+
+### 2. Factory (Criacional)
+* **Problema**: A criação de objetos de domínio (`UserEntity`) e DTOs (`UserDTO`) estava acoplada e espalhada pelo código, misturando lógica de hash de senha.
+* **Solução**: Classe `UserFactory`.
+* **Implementação**: Centraliza a conversão `DTO <-> Entity` e a regra de encriptação da senha no momento da criação da entidade, removendo essa responsabilidade do Service.
+
+### 3. Adapter (Estrutural)
+* **Problema**: O sistema precisava registrar logs de auditoria, mas a implementação concreta (arquivo, banco, API externa) poderia variar.
+* **Solução**: Interface `AuditService` e adaptador `FileAuditAdapter`.
+* **Implementação**: O `FileAuditAdapter` adapta a interface de domínio `AuditService` para a escrita em sistema de arquivos (Java IO), permitindo que o Service apenas chame `.log()` sem conhecer a tecnologia de persistência do log.
+
+---
+
+## 🛠️ Tecnologias Utilizadas
+
+* **Java 21**: Linguagem base.
+* **Spring Boot 3.5.5**: Framework principal.
+* **Spring Data JPA / Hibernate**: Persistência de dados.
+* **H2 Database**: Banco em memória.
+* **Thymeleaf**: Template engine para o Frontend.
+* **Bootstrap 5**: Estilização da interface.
+* **Maven**: Gestão de dependências.
+
+---
+
+## ⚙️ Como Executar
+
+### Pré-requisitos
+* Java 21 instalado.
+* Porta `8080` livre.
+
+### Passos
+1.  Clone o repositório.
+2.  Na raiz do projeto, execute via terminal:
+
+    **Linux/macOS:**
     ```bash
     ./mvnw spring-boot:run
     ```
 
-    *No Windows:*
+    **Windows:**
     ```bash
     ./mvnw.cmd spring-boot:run
     ```
 
-4.  O servidor será iniciado na porta `8080`.
-
-## Configuração
-
-O arquivo `application.yml` define as configurações principais:
-
-* **Porta do Servidor**: `8080`
-* **Banco de Dados H2**:
-    * O console H2 está habilitado e acessível em: `http://localhost:8080/h2-console`
-    * **JDBC URL**: `jdbc:h2:mem:userServicedb`
-    * **Usuário**: `sa`
-    * **Senha**: (em branco)
-* **JPA**: O `ddl-auto` está configurado como `update`, e o SQL é logado no console.
-* **Flyway**: Está incluído no `pom.xml` mas desabilitado no `application.yml` (`enabled: false`).
-* **Actuator**: Todos os endpoints do Actuator estão expostos (`management.endpoints.web.exposure.include: '*'`).
-
-## Arquitetura Multi-Tenant
-
-O projeto implementa uma estratégia de multi-tenancy baseada em "Shared Database, Shared Schema, Discriminator Column".
-
-* A entidade `UserEntity` possui um campo `tenant` anotado com `@TenantId`.
-* A classe `TenantFilter` intercepta todas as requisições para extrair o header `x-tenant`.
-    * Se o header `x-tenant` estiver ausente, a requisição é rejeitada com um erro `400 Bad Request`.
-* O `TenantIdentifierResolver` armazena o ID do tenant atual e o fornece ao Hibernate para filtrar as consultas.
-* A tabela `USERS` possui uma constraint única (`UK_USR_001`) combinando `username` e `TENANT`, garantindo que o nome de usuário seja único *por tenant*.
-
-**Importante**: Todas as requisições para a API devem incluir o header `x-tenant` para identificar o tenant.
-
-## Endpoints da API
-
-A URL base para os endpoints de usuário é `/userService/users`.
-
-| Método | Endpoint | Descrição | Validação (Grupo) |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/` | Cria um novo usuário. A senha é armazenada com hash BCrypt. | `View.Create` |
-| `GET` | `/` | Lista todos os usuários (filtrados pelo tenant atual). | - |
-| `GET` | `/{id}` | Busca um usuário por ID (do tenant atual). | - |
-| `PUT` | `/{id}` | Atualiza o `username` e `roles` de um usuário existente. | `View.Update` |
-| `DELETE` | `/{id}` | Remove um usuário por ID. | - |
+3.  Acesse a aplicação em: `http://localhost:8080`
 
 ---
-### Validação
 
-* **`UserDTO`**: Usa `jakarta.validation` (`@NotBlank`, `@NotEmpty`) para campos básicos.
-* **`@UserCreate` (`UserCreateImpl.java`)**: Validação customizada ativada no grupo `View.Create`. Verifica se o `username` já existe no banco (case-insensitive) antes de criar.
-* **`@UserUpdate` (`UserUpdateImpl.java`)**: Validação customizada ativada no grupo `View.Update`. Verifica se o `username` já existe, excluindo o ID do próprio usuário que está sendo atualizado.
+## 🖥️ Interface Web e Multi-tenancy
 
-### Segurança
+O sistema possui um mecanismo inteligente de gestão de tenants:
 
-A segurança é configurada em `SecurityConfig.java`:
+1.  **Seleção de Tenant**: Ao acessar a home, você pode selecionar ou criar um "Tenant" (organização).
+2.  **Sessão**: O tenant selecionado é salvo na sessão do navegador.
+3.  **Isolamento**: Todos os usuários criados ou listados pertencem exclusivamente ao tenant ativo.
+4.  **Fallback**: Se nenhum tenant for definido, o sistema tenta usar o tenant padrão `bradev`.
 
-* **CSRF**: Desabilitado (`csrf.disable()`).
-* **Autorização**: Todas as requisições são permitidas (`.anyRequest().permitAll()`). (Nota: Em um ambiente de produção, isso deve ser restrito).
-* **PasswordEncoder**: Um bean `BCryptPasswordEncoder` é fornecido e injetado no `UserService` para codificar as senhas dos usuários no momento da criação.
+---
 
-## Estrutura do Projeto (Pacotes Principais)
+## 🔌 Endpoints da API
 
-* `br.com.project.userService`
-    * `common`: Classes utilitárias (Records `ExceptionMessage`, `FieldMessage`, e interface `View`).
-    * `config`: Configurações do Spring (Dozer, Security).
-    * `controller`: Controladores REST (`UserController`) e gerenciamento de exceções (`CustomExceptionHandle`).
-    * `domain`: Entidades JPA (`UserEntity`).
-    * `dto`: Data Transfer Objects (`UserDTO`).
-    * `exception`: Exceções customizadas (`RecordNotFoundException`).
-    * `repository`: Repositórios Spring Data JPA (`UserRepository`).
-    * `service`: Lógica de negócios (`UserService`).
-    * `tenant`: Classes de implementação da multi-tenancy (`TenantFilter`, `TenantIdentifierResolver`).
-    * `validation`: Anotações e implementações de validação customizada.
+Para integrações via Postman/Insomnia, utilize a URL base `/userService/users`.
+**Nota:** É obrigatório enviar o header `x-tenant` nas requisições da API.
+
+| Método | Endpoint | Descrição | Header Obrigatório |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/` | Lista usuários do tenant. | `x-tenant: clienteA` |
+| `POST` | `/` | Cria novo usuário. | `x-tenant: clienteA` |
+| `GET` | `/{id}` | Busca usuário por ID. | `x-tenant: clienteA` |
+| `PUT` | `/{id}` | Atualiza usuário. | `x-tenant: clienteA` |
+| `DELETE` | `/{id}` | Remove usuário. | `x-tenant: clienteA` |
+
+---
+
+## 📂 Estrutura de Pastas Relevante
+
+```text
+src/main/java/br/com/project/userService
+├── adapter      # Padrão Adapter (AuditService)
+├── controller   # Controladores Web e API
+├── factory      # Padrão Factory (UserFactory)
+├── service      # Regras de Negócio
+├── strategy     # Padrão Strategy (PasswordStrategy)
+└── tenant       # Filtros e Resolver de Multi-tenancy
