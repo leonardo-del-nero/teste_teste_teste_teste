@@ -12,7 +12,7 @@ O projeto original era uma API REST com acoplamento forte a bibliotecas externas
 
 **Nesta versão refatorada (v2.0), entregamos:**
 
-1.  **Sistema Híbrido (Web + API):** Unificação de estratégias de renderização no servidor (MVC) e exposição de dados (REST).
+1.  **Sistema Híbrido (Web + API):** Além dos endpoints JSON, implementamos um **Dashboard Administrativo** com Thymeleaf e Bootstrap.
 2.  **Design Patterns:** Substituição de lógicas rígidas por padrões flexíveis (Strategy, Factory, Adapter).
 3.  **Tenant Isolation (Thread-Safe):** Evoluímos o `TenantResolver` de um Singleton instável para uso de `ThreadLocal`, garantindo isolamento total entre requisições simultâneas.
 
@@ -29,8 +29,7 @@ O projeto original era uma API REST com acoplamento forte a bibliotecas externas
 ---
 
 ## 🏛️ Arquitetura do Sistema
-
-A aplicação adota uma abordagem **Híbrida**, separando claramente as responsabilidades de Interface Gráfica e API. Abaixo estão os arquivos principais que compõem cada arquitetura:
+A aplicação segue a **Layered Architecture** (Camadas) típica do Spring Boot, mas enriquecida para suportar o modelo híbrido, separando claramente as responsabilidades de Interface Gráfica e API.
 
 ### 1. MVC (Model-View-Controller) - Frontend
 Utilizado para o Dashboard Administrativo (Server-Side Rendering).
@@ -53,6 +52,9 @@ Utilizado no núcleo do backend para regras de negócio e endpoints JSON.
     * *Responsabilidade:* Interface de comunicação com o banco de dados via Spring Data JPA.
 
 ---
+
+> **Nota sobre C4 Model:** Os diagramas de contexto e container (Nível 1 e 2) exigidos na atividade encontram-se na pasta `/docs` do repositório.
+
 
 ## 🏗️ Design Patterns Aplicados
 
