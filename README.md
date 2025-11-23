@@ -1,69 +1,85 @@
-# User Service - Multi-tenant Application
+# User Service - Sistema Multi-tenant com Design Patterns
 
-Este é um projeto **Spring Boot** que fornece um sistema completo de gestão de usuários. O projeto foi desenhado para demonstrar a aplicação prática de **Design Patterns (GoF)**, arquitetura **Multi-tenant**, e desenvolvimento Web com **Thymeleaf**.
-
-O sistema possui tanto uma **API REST** quanto uma **Interface Web (Dashboard)** para administração.
-
-## 🚀 Principais Características
-
-* **Arquitetura Multi-Tenant**: Isolamento de dados baseado em coluna (`discriminator`) via header `x-tenant` ou sessão web.
-* **Design Patterns**: Aplicação de padrões Criacionais, Estruturais e Comportamentais.
-* **Interface Web Responsiva**: Dashboard administrativo criado com Thymeleaf e Bootstrap 5.
-* **Auditoria**: Sistema de log de operações em arquivo (`audit.log`) via Adapter.
-* **Segurança**: Hashing de senhas com BCrypt e validação de força de senha customizável.
-* **API REST**: Endpoints documentados para integração externa.
+Este projeto é uma aplicação **Spring Boot** desenvolvida para a disciplina **ILP037 - Técnicas de Programação II**. O objetivo principal é demonstrar a refatoração de um sistema legado (CRUD simples) para uma arquitetura robusta utilizando **Design Patterns (GoF)**, respeitando princípios SOLID e implementando uma arquitetura **Multi-tenant**.
 
 ---
 
-## 🏗️ Design Patterns Aplicados
+## 1. Contextualização e Problema
 
-O projeto foca na utilização de boas práticas de Engenharia de Software. Abaixo estão os detalhes e exemplos de código da implementação:
+### O Problema
+Sistemas corporativos modernos frequentemente precisam atender múltiplos clientes (organizações) utilizando uma única instância da aplicação, garantindo que os dados de um cliente nunca sejam acessados por outro. Além disso, regras de negócio como "validação de senha" e "auditoria" tendem a mudar com frequência, tornando códigos acoplados difíceis de manter.
 
-### 1. Strategy (Comportamental)
-* **Problema**: A necessidade de validar senhas com regras que podem mudar (ex: senha forte, senha simples, validação corporativa).
-* **Solução**: Interface `PasswordStrategy`.
-* **Implementação**: A classe `StrongPasswordStrategy` encapsula a lógica de validação.
-* **Princípio Open/Closed (OCP)**: Esta implementação respeita o princípio Open/Closed do SOLID. O sistema está **aberto para extensão** (podemos criar uma `SimplePasswordStrategy` ou `CorporatePasswordStrategy`) mas **fechado para modificação** (não precisamos alterar o código do `UserService` para mudar a regra de validação).
+### A Solução
+O **User Service** resolve estes problemas através de:
+1.  **Isolamento de Dados (Multi-tenancy):** Utilização de uma coluna discriminadora (`tenant_id`) gerenciada automaticamente via Hibernate Filters e Aspectos, garantindo segurança a nível de banco de dados.
+2.  **Desacoplamento:** Uso de Design Patterns para isolar regras de validação, criação de objetos e persistência de logs.
 
-**Exemplo de Código:**
+---
+
+## 2. Arquitetura do Sistema
+
+O sistema segue uma arquitetura em camadas (Layered Architecture) clássica do Spring Boot, mas enriquecida com camadas de abstração para os padrões de projeto.
+
+* **Camada Web:** Controllers REST e Thymeleaf.
+* **Camada de Aplicação:** Services que orquestram o fluxo.
+* **Camada de Domínio:** Entidades e Interfaces de Padrões.
+* **Camada de Infraestrutura:** Implementações concretas (Repositórios, Adapters).
+
+> **Nota sobre C4 Model:** Os diagramas de contexto e container (Nível 1 e 2) encontram-se na pasta `/docs` do repositório.
+
+---
+
+## 3. Design Patterns Aplicados (Refatoração)
+
+Abaixo detalhamos a aplicação dos 3 padrões de projeto exigidos, comparando a versão original (Legado/v1) com a versão refatorada.
+
+### 3.1. Strategy (Comportamental) - Validação de Senha
+
+* **Contexto:** A validação de complexidade de senha pode variar (ex: exigir caracteres especiais, tamanho mínimo, ou permitir senhas simples em dev).
+* **Problema na v1:** A validação ficaria *hardcoded* no `UserService` ou anotações rígidas no DTO, violando o princípio Aberto/Fechado (OCP).
+* **Solução (Pattern):** Criar uma interface `PasswordStrategy` que define o contrato de validação.
+
+#### Antes (Acoplado)
+A validação e o encode eram feitos diretamente no fluxo do serviço ou via anotações que não permitem lógica complexa dinâmica.
+
+#### Depois (Refatorado)
+O `UserService` desconhece a regra exata. Ele apenas chama `.validate()`.
+
 ```java
-// Interface (Contrato)
+// Interface
 public interface PasswordStrategy {
     void validate(String password);
 }
 
-// Implementação Concreta (Estratégia)
+// Implementação Concreta (Strategy)
 @Component
 @Primary
 public class StrongPasswordStrategy implements PasswordStrategy {
-    @Override
     public void validate(String password) {
-        if (password == null || password.length() < 8) {
-            throw new IllegalArgumentException("A senha deve ter pelo menos 8 caracteres.");
-        }
-        // ... outras validações (regex, etc)
+        if (password.length() < 8) throw new IllegalArgumentException("Senha muito curta");
+        // ... outras regras
     }
 }
 ```
 
-### 2. Factory (Criacional)
-* **Problema**: A criação de objetos de domínio (`UserEntity`) e DTOs (`UserDTO`) estava acoplada e espalhada pelo código, misturando lógica de hash de senha.
-* **Solução**: Classe `UserFactory`.
-* **Implementação**: Centraliza a conversão `DTO <-> Entity` e a regra de encriptação da senha no momento da criação da entidade, removendo essa responsabilidade do Service.
+### 3.2. Factory (Criacional) - Criação de Usuário
 
-**Exemplo de Código:**
+* **Contexto:** A criação de uma entidade `UserEntity` a partir de um DTO envolve regras específicas, como a criptografia da senha (Hash).
+* **Problema na v1:** O `UserService` utilizava o DozerMapper (biblioteca externa) e injetava o `PasswordEncoder` diretamente. Isso espalhava a lógica de hash e dependências de mapeamento pelo Service.
+* **Solução (Pattern):** Centralizar a criação e o encapsulamento da entidade em uma `UserFactory`.
+
+#### Trecho de Código Relevante
+
 ```java
 @Component
 @RequiredArgsConstructor
 public class UserFactory {
-    
     private final PasswordEncoder passwordEncoder;
 
-    // Encapsula a criação e a regra de criptografia
     public UserEntity createEntityFromDTO(UserDTO dto) {
         UserEntity entity = new UserEntity();
         entity.setUsername(dto.getUsername());
-        // A lógica de hash fica isolada aqui
+        // A Factory decide que a senha deve ser hashada ao nascer
         entity.setPassword(passwordEncoder.encode(dto.getPassword())); 
         entity.setRoles(dto.getRoles());
         return entity;
@@ -71,123 +87,77 @@ public class UserFactory {
 }
 ```
 
-### 3. Adapter (Estrutural)
-* **Problema**: O sistema precisava registrar logs de auditoria, mas a implementação concreta (arquivo, banco, API externa) poderia variar ou ser incompatível com a interface de domínio.
-* **Solução**: Interface `AuditService` e adaptador `FileAuditAdapter`.
-* **Implementação**: O `FileAuditAdapter` adapta a interface de domínio `AuditService` para a escrita em sistema de arquivos (Java IO). O Service apenas chama `.log()` sem conhecer a tecnologia de persistência (arquivo, banco, console).
+**Justificativa:** Remove a responsabilidade de "saber como criar um usuário válido" do Service. Se mudarmos a biblioteca de hash ou de mapeamento, o Service não é afetado.
 
-**Exemplo de Código:**
+### 3.3. Adapter (Estrutural) - Sistema de Auditoria
+
+* **Contexto:** O sistema precisa registrar operações críticas (criação/exclusão de usuários).
+* **Problema na v1:** Não existia auditoria, ou seria implementada com `System.out.println` ou dependência direta de bibliotecas de Log/Arquivo dentro do Service.
+* **Solução (Pattern):** Definir uma interface de domínio `AuditService` e criar um Adaptador para escrever em arquivo físico (`FileAuditAdapter`).
+
+#### Implementação
+
+O Service depende apenas da abstração:
+
 ```java
-// Interface esperada pelo sistema (Domain)
-public interface AuditService {
-    void log(String operacao, String detalhes);
-}
+// No UserService
+private final AuditService auditService;
 
-// Adaptador que conecta o sistema ao Java IO (File System)
+public void delete(long id) {
+    // ... deleta ...
+    auditService.log("DELETE", "Usuario removido ID: " + id);
+}
+```
+
+O Adaptador lida com a complexidade de I/O (Java IO, FileWriters, Try-with-resources):
+
+```java
 @Component
 public class FileAuditAdapter implements AuditService {
-    @Override
     public void log(String operacao, String detalhes) {
-        // Adapta a chamada simples para a complexidade de IO
-        try (FileWriter fileWriter = new FileWriter("audit.log", true);
-             PrintWriter printWriter = new PrintWriter(fileWriter)) {
-            
-            printWriter.printf("[%s] OP: %s | DETALHES: %s%n", 
-                LocalDateTime.now(), operacao, detalhes);
-                
-        } catch (IOException e) {
-            System.err.println("Erro ao escrever no log: " + e.getMessage());
+        try (FileWriter fw = new FileWriter("audit.log", true)) {
+            // Escrita em baixo nível
         }
     }
 }
 ```
 
----
-
-## 🛠️ Tecnologias Utilizadas
-
-* **Java 21**: Linguagem base.
-* **Spring Boot 3.5.5**: Framework principal.
-* **Spring Data JPA / Hibernate**: Persistência de dados.
-* **H2 Database**: Banco em memória.
-* **Thymeleaf**: Template engine para o Frontend.
-* **Bootstrap 5**: Estilização da interface.
-* **Maven**: Gestão de dependências.
+**Justificativa:** Permite trocar a tecnologia de log (para Banco de Dados, API Externa, Console) sem tocar em uma linha de código do UserService.
 
 ---
 
-## ⚙️ Como Executar
+## 4. Tecnologias Utilizadas
 
-### Pré-requisitos
-* Java 21 instalado.
-* Porta `8080` livre.
-
-### Passos para Execução
-1.  Clone o repositório.
-2.  Na raiz do projeto, execute via terminal:
-
-    **Linux/macOS:**
-    ```bash
-    ./mvnw spring-boot:run
-    ```
-
-    **Windows:**
-    ```bash
-    ./mvnw.cmd spring-boot:run
-    ```
-
-3.  Acesse a aplicação em: `http://localhost:8080`
-
-### 🧪 Executando Testes Unitários
-
-O projeto inclui testes automatizados (JUnit/Mockito) para validar as regras de negócio e os padrões implementados. Para executá-los:
-
-**Linux/macOS:**
-```bash
-./mvnw test
-```
-
-**Windows:**
-```bash
-./mvnw.cmd test
-```
+* **Java 21:** Linguagem base.
+* **Spring Boot 3.5.5:** Framework.
+* **Spring Data JPA:** Persistência.
+* **H2 Database:** Banco em memória.
+* **Thymeleaf:** Engine de templates para o Frontend.
+* **Maven:** Gerenciamento de dependências.
 
 ---
 
-## 🖥️ Interface Web e Multi-tenancy
+## 5. Como Executar
 
-O sistema possui um mecanismo inteligente de gestão de tenants:
-
-1.  **Seleção de Tenant**: Ao acessar a home, você pode selecionar ou criar um "Tenant" (organização).
-2.  **Sessão**: O tenant selecionado é salvo na sessão do navegador.
-3.  **Isolamento**: Todos os usuários criados ou listados pertencem exclusivamente ao tenant ativo.
-4.  **Fallback**: Se nenhum tenant for definido, o sistema tenta usar o tenant padrão `bradev`.
-
----
-
-## 🔌 Endpoints da API
-
-Para integrações via Postman/Insomnia, utilize a URL base `/userService/users`.
-**Nota:** É obrigatório enviar o header `x-tenant` nas requisições da API.
-
-| Método | Endpoint | Descrição | Header Obrigatório |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/` | Lista usuários do tenant. | `x-tenant: clienteA` |
-| `POST` | `/` | Cria novo usuário. | `x-tenant: clienteA` |
-| `GET` | `/{id}` | Busca usuário por ID. | `x-tenant: clienteA` |
-| `PUT` | `/{id}` | Atualiza usuário. | `x-tenant: clienteA` |
-| `DELETE` | `/{id}` | Remove usuário. | `x-tenant: clienteA` |
+1.  Certifique-se de ter o **Java 21** instalado.
+2.  Clone o repositório.
+3.  Execute o comando:
+    * Linux/Mac: `./mvnw spring-boot:run`
+    * Windows: `./mvnw.cmd spring-boot:run`
+4.  Acesse: `http://localhost:8080`
 
 ---
 
-## 📂 Estrutura de Pastas Relevante
+## 6. Endpoints da API
 
-```text
-src/main/java/br/com/project/userService
-├── adapter      # Padrão Adapter (AuditService)
-├── controller   # Controladores Web e API
-├── factory      # Padrão Factory (UserFactory)
-├── service      # Regras de Negócio
-├── strategy     # Padrão Strategy (PasswordStrategy)
-└── tenant       # Filtros e Resolver de Multi-tenancy
-```
+Para testar via Postman/Insomnia, utilize o header `x-tenant`.
+
+| Verbo | Endpoint | Descrição |
+| :--- | :--- | :--- |
+| **POST** | `/userService/users` | Cria usuário (JSON body) |
+| **GET** | `/userService/users` | Lista usuários do tenant |
+| **PUT** | `/userService/users/{id}` | Atualiza usuário |
+
+---
+
+**Projeto desenvolvido por Leonardo Del Nero para a disciplina de Técnicas de Programação II.**
