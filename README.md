@@ -30,21 +30,27 @@ O projeto original era uma API REST com acoplamento forte a bibliotecas externas
 
 ## 🏛️ Arquitetura do Sistema
 
-A aplicação adota uma abordagem **Híbrida**, utilizando dois padrões arquiteturais distintos para atender a requisitos diferentes (Interface Gráfica vs API):
+A aplicação adota uma abordagem **Híbrida**, separando claramente as responsabilidades de Interface Gráfica e API. Abaixo estão os arquivos principais que compõem cada arquitetura:
 
 ### 1. MVC (Model-View-Controller) - Frontend
-Utilizado na interface administrativa (`WebController`).
-* **Model:** Dados do tenant e usuários processados pelo Spring.
-* **View:** Renderização server-side com **Thymeleaf** (`.html`).
-* **Controller:** Gerencia a navegação e a sessão do usuário.
+Utilizado para o Dashboard Administrativo (Server-Side Rendering).
+
+* **Controller (`C`):** `.../controller/WebController.java`
+    * *Responsabilidade:* Intercepta requisições do navegador, gerencia a sessão do tenant e popula o `Model`.
+* **View (`V`):** `src/main/resources/templates/`
+    * *Responsabilidade:* Arquivos HTML (`index.html`, `users.html`) renderizados dinamicamente pelo Thymeleaf.
+* **Model (`M`):** Objeto `Model` do Spring
+    * *Responsabilidade:* Transporta dados (ex: `UserDTO`, `currentTenant`) do Controller para a View.
 
 ### 2. CSR (Controller-Service-Repository) - API REST
-Utilizado no núcleo do backend (`UserController`).
-* **Controller:** Camada de entrada HTTP pura, validação de DTOs e retorno de status codes.
-* **Service:** Camada agnóstica que detém a regra de negócio e orquestra os Design Patterns.
-* **Repository:** Abstração de persistência com Spring Data JPA.
+Utilizado no núcleo do backend para regras de negócio e endpoints JSON.
 
-> **Nota sobre C4 Model:** Os diagramas de contexto e container (Nível 1 e 2) exigidos na atividade encontram-se na pasta `/docs` do repositório, detalhando essa separação híbrida.
+* **Controller (`C`):** `.../controller/UserController.java`
+    * *Responsabilidade:* Ponto de entrada da API. Recebe JSON, valida inputs e retorna códigos HTTP.
+* **Service (`S`):** `.../service/UserService.java`
+    * *Responsabilidade:* Camada agnóstica onde residem as regras de negócio e a orquestração dos Design Patterns.
+* **Repository (`R`):** `.../repository/UserRepository.java`
+    * *Responsabilidade:* Interface de comunicação com o banco de dados via Spring Data JPA.
 
 ---
 
